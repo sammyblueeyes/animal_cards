@@ -30,34 +30,39 @@ static unsigned int num_bits(uint32_t bits)
     return count;
 }
 
-void Animal_card_app::drawCard(QPainter& painter, uint32_t barcode_val, double scale)
+void Animal_card_app::drawCard(QPainter& painter, 
+        uint32_t barcode_val, double scale,
+        bool scale_fonts)
 {
     painter.save();
 
     int num_bits = 13;
 
-    double width = scale*55;
-    double height = scale*85;
+    double width = scale*card_width;
+    double height = scale*card_height;
     double barcode_width = scale*10;
     double barcode_height = scale*53;
-    double barcode_font_height = scale*1;
     double thick_height = scale*3;
     double thin_height = scale*1.3;
     double offset = scale*17;
-    double title_font_height = scale*5;
-    double subtitle_font_height = scale*3;
     double title_line_space = scale*6;
     double title_x = scale*5;
     double title_y = scale*20;
 
+    double barcode_font_height = 1;
+    double title_font_height = 5;
+    double subtitle_font_height = 3;
+    if (scale_fonts) {
+        barcode_font_height *= scale;
+        title_font_height *= scale;
+        subtitle_font_height *= scale;
+    }
 
-    // Draw card
-    painter.drawRect(QRectF(0,0, width, height));
+
 
     // Barcode
     double increment = barcode_height/(num_bits-1);
 
-    painter.setPen(Qt::black);
     painter.setFont(QFont("Courier", barcode_font_height));
 
     for (int i = 0; i < num_bits; ++i) {
@@ -83,7 +88,6 @@ void Animal_card_app::drawCard(QPainter& painter, uint32_t barcode_val, double s
                     "Odd Parity");
         } else {
             int column = (1 << i) >> 3;
-            printf("col = %d\n", column);
             painter.drawText(QPointF(text_x, text_y), 
                     QString("%1").arg(column));
         }
@@ -98,16 +102,25 @@ void Animal_card_app::drawCard(QPainter& painter, uint32_t barcode_val, double s
     title_y += title_line_space;
     painter.drawText(QPointF(title_x, title_y), QString("Card #%1")
                  .arg(barcode_val >> 3));
+
+    // Draw card
+    painter.setPen(Qt::black);
+    painter.drawRect(QRectF(0,0, width, height));
+
     painter.restore();
 }
 
 
 
 Animal_card_app::Animal_card_app(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent),
+    card_width(55),
+    card_height(85)
 {
     setWindowTitle(tr("Animal card app"));
     resize(800, 1000);
+
+    printFile();
 }
 
 
@@ -118,25 +131,87 @@ void Animal_card_app::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
+    drawPage(painter, 10);
 
 
-//    for (uint32_t i = 1; i < 108; i++) {
+}
 
-        uint32_t i = 53;
+void Animal_card_app::drawPage(QPainter& painter, double scale,
+        bool scale_fonts)
+{
+
+    uint32_t i = 53;
+    unsigned int n = num_bits(i);
+    bool even = n & 1;
+    bool odd = !even;
+
+    uint32_t barcode_val = 1 | 
+            ((odd ? 1 : 0) << 1) | 
+            ((even ? 1 : 0) << 2) |
+            (i << 3);
+
+    //painter.translate(10, 10);
+    //painter.scale(side / 100.0, side / 100.0);
+    drawCard(painter, barcode_val, scale, scale_fonts);
+
+}
+
+void Animal_card_app::printFile()
+{
+    QPrinter printer(QPrinter::ScreenResolution);
+    printer.setOutputFileName("cards.pdf");
+    printer.setPaperSize(QPrinter::A4);
+    QPainter painter;
+    painter.begin(&printer);
+
+    double dpmm = (printer.resolution() / 25.4);
+
+    QRectF page =  printer.pageRect(QPrinter::Millimeter);
+
+    double scale = dpmm;
+    int gap = 3; // mm between cards
+    int num_cols = (page.width()+gap) / (card_width + gap);
+    int num_rows = (page.height()+gap) / (card_height + gap);
+    int cur_row = 0;
+    int cur_col = 0;
+
+    printf("Page size = %f x %f : rows=%d : cols=%d\n",
+            page.width(),
+            page.height(),
+            num_rows,
+            num_cols);
+
+    for (uint32_t i = 109; i < 118; i++) {
+
         unsigned int n = num_bits(i);
         bool even = n & 1;
         bool odd = !even;
 
         uint32_t barcode_val = 1 | 
-                ((odd ? 1 : 0) << 1) | 
-                ((even ? 1 : 0) << 2) |
-                (i << 3);
+        ((odd ? 1 : 0) << 1) | 
+        ((even ? 1 : 0) << 2) |
+        (i << 3);
 
-        painter.translate(10, 10);
-        //painter.scale(side / 100.0, side / 100.0);
-        drawCard(painter, barcode_val, 10);
-//    }
+        painter.save();
 
+        QPointF offset (
+                cur_col * (card_width*scale) + cur_col * (scale*gap),
+                cur_row * (card_height*scale) + cur_row * (scale*gap));
+        printf("%d:%d: Offset = %f, %f\n", 
+                cur_row, cur_col,
+                offset.x(), offset.y());
+
+        painter.translate(offset);
+        drawCard(painter, barcode_val, scale, true);
+        painter.restore();
+
+        cur_col = ++cur_col % num_cols;
+        if (cur_col == 0) {
+            cur_row = ++cur_row % num_rows;
+        }
+
+    }
+
+    painter.end();
 }
-
 

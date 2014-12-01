@@ -15,7 +15,13 @@ class Animal_card_app : public QWidget
 
     private:
         void drawCard(QPainter& painter, uint32_t barcode_val, 
-                double scale = 1.0);
+                double scale = 1.0, bool scale_fonts = true);
+        void drawPage(QPainter& painter, double scale = 1.0, 
+                bool scale_fonts = true);
+        void printFile();
+
+    double card_width;
+    double card_height;
 };
 
 
