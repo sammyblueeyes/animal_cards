@@ -1,5 +1,8 @@
 #include "Animal_card_app.h"
-#include <QtGui>
+#include <QPainter>
+#include <QPrinter>
+#include <cstdio>
+#include <cmath>
 
 
 /*
@@ -12,7 +15,8 @@
  *                1mm thin lines
  */
 
-static void print_bits(uint32_t bits, unsigned int length, int space = -1) 
+static void print_bits(uint32_t bits, 
+        unsigned int length, int space = -1) 
 {
     for (int i = length-1; i >= 0; i--) {
         if (i == space-1) printf(" ");
@@ -21,7 +25,7 @@ static void print_bits(uint32_t bits, unsigned int length, int space = -1)
     printf("\n");
 }
 
-static unsigned int num_bits(uint32_t bits)
+static unsigned int count_bits(uint32_t bits)
 {
     int count = 0;
     for (int i = 0; i < sizeof(bits)*8; i++) {
@@ -36,11 +40,10 @@ void Animal_card_app::drawCard(QPainter& painter,
 {
     painter.save();
 
-    int num_bits = 13;
 
     double width = scale*card_width;
     double height = scale*card_height;
-    double barcode_width = scale*10;
+    double barcode_width = scale * NUM_ID_BITS;
     double barcode_height = scale*53;
     double thick_height = scale*3;
     double thin_height = scale*1.3;
@@ -58,14 +61,12 @@ void Animal_card_app::drawCard(QPainter& painter,
         subtitle_font_height *= scale;
     }
 
-
-
     // Barcode
-    double increment = barcode_height/(num_bits-1);
+    double increment = barcode_height/(NUM_BITS-1);
 
     painter.setFont(QFont("Courier", barcode_font_height));
 
-    for (int i = 0; i < num_bits; ++i) {
+    for (int i = 0; i < NUM_BITS; ++i) {
         bool on = barcode_val & (1 << i);
         double h = on ? thick_height : thin_height;
         double y = i*increment + offset - h;
@@ -73,8 +74,6 @@ void Animal_card_app::drawCard(QPainter& painter,
         painter.fillRect(QRectF(x,y, barcode_width, h), 
                 Qt::SolidPattern);
 
-        // TODO: Add information about the parity and 
-        // binary encoding.
         double text_x = width-barcode_width-barcode_width;
         double text_y = y+h;
         if (i == 0) { 
@@ -112,54 +111,26 @@ void Animal_card_app::drawCard(QPainter& painter,
 
 
 
-Animal_card_app::Animal_card_app(QWidget *parent)
-    : QWidget(parent),
+Animal_card_app::Animal_card_app() :
     card_width(55),
     card_height(85)
 {
-    setWindowTitle(tr("Animal card app"));
-    resize(800, 1000);
-
     printFile();
 }
 
 
-void Animal_card_app::paintEvent(QPaintEvent *event)
+void Animal_card_app::printFile(uint32_t start, uint32_t end, 
+                const char* filename)
 {
-    int side = qMin(width(), height());
+    const unsigned int MAX_ID = pow(2, NUM_ID_BITS) - 1;
 
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
+    if (!filename) filename = "cards.pdf";
+    if (start < MIN_ID) start = MIN_ID;
+    if (end < start) end = start+1;
+    if (end > MAX_ID) end = MAX_ID;
 
-    drawPage(painter, 10);
-
-
-}
-
-void Animal_card_app::drawPage(QPainter& painter, double scale,
-        bool scale_fonts)
-{
-
-    uint32_t i = 53;
-    unsigned int n = num_bits(i);
-    bool even = n & 1;
-    bool odd = !even;
-
-    uint32_t barcode_val = 1 | 
-            ((odd ? 1 : 0) << 1) | 
-            ((even ? 1 : 0) << 2) |
-            (i << 3);
-
-    //painter.translate(10, 10);
-    //painter.scale(side / 100.0, side / 100.0);
-    drawCard(painter, barcode_val, scale, scale_fonts);
-
-}
-
-void Animal_card_app::printFile()
-{
     QPrinter printer(QPrinter::ScreenResolution);
-    printer.setOutputFileName("cards.pdf");
+    printer.setOutputFileName(filename);
     printer.setPaperSize(QPrinter::A4);
     QPainter painter;
     painter.begin(&printer);
@@ -181,9 +152,11 @@ void Animal_card_app::printFile()
             num_rows,
             num_cols);
 
-    for (uint32_t i = 109; i < 118; i++) {
+    printf("Generating '%s'...\n", filename);
 
-        unsigned int n = num_bits(i);
+    for (uint32_t i = start; i <= end ; i++) {
+
+        unsigned int n = count_bits(i);
         bool even = n & 1;
         bool odd = !even;
 
@@ -197,9 +170,6 @@ void Animal_card_app::printFile()
         QPointF offset (
                 cur_col * (card_width*scale) + cur_col * (scale*gap),
                 cur_row * (card_height*scale) + cur_row * (scale*gap));
-        printf("%d:%d: Offset = %f, %f\n", 
-                cur_row, cur_col,
-                offset.x(), offset.y());
 
         painter.translate(offset);
         drawCard(painter, barcode_val, scale, true);
@@ -208,10 +178,14 @@ void Animal_card_app::printFile()
         cur_col = ++cur_col % num_cols;
         if (cur_col == 0) {
             cur_row = ++cur_row % num_rows;
+            if (cur_row == 0) {
+                printer.newPage();
+            }
         }
 
     }
 
     painter.end();
+    printf("   Done.\n");
 }
 
