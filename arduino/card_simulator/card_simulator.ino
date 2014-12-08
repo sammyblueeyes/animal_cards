@@ -1,16 +1,10 @@
 #include <stdint.h>
-/*
-  Blink
- Turns on an LED on for one second, then off for one second, repeatedly.
- 
- This example code is in the public domain.
- */
 
 
-
-// Pin 13 has an LED connected on most Arduino boards.
-// give it a name:
-int led = 12;
+// Connect pin 12 to the IR LED
+int led = 11;
+// Connect pin 11 to the relay
+int relay = 13;
 
 static unsigned int count_bits(uint32_t bits)
 {
@@ -65,17 +59,24 @@ void setup() {
 void loop() {
 
   delay(2000);
-  for (int i = 181; i < 1024; i++) {
+  for (int i = 191; i < 1024; i++) {
+    digitalWrite(relay, HIGH);
+ delay(200);
+    digitalWrite(relay, LOW);
+    delay(200);
+
+
     digitalWrite(led, HIGH); 
     delay(500);
-    digitalWrite(led, HIGH); 
 
     
     print_bits(generate_barcode(i), 13);
     digitalWrite(led, HIGH); 
     delay(500);
     digitalWrite(led, LOW); 
+
     delay(5000);
+
   }
 }
 
